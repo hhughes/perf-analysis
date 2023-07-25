@@ -3,8 +3,9 @@ import re
 import json
 from collections import Counter
 import argparse
+import event_parser
 
-DEBUG_ON = False
+DEBUG_ON = True
 
 
 def debug(msg):
@@ -17,32 +18,13 @@ def debug(msg):
         print(f'DEBUG: {msg}')
 
 
+KTIME = 'time'
 KDATE = 'date'
 KNAME = 'name'
 KPROC = 'proc'
 KLEVEL = 'level'
 KNODE = 'node'
 KMESSAGE = 'message'
-
-# 2023-06-16 18:51:08,773 [CmdOut:208468]
-date_exp = rf'(?P<{KDATE}>\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}},\d{{3}})'
-proc_exp = rf'\[(?P<{KNAME}>\w+):(?P<pid>\d+)\]'
-level_exp = rf'(?P<{KLEVEL}>[A-Z]+)'
-node_exp = rf'(?P<{KNODE}>[\w\-]+)'
-message_exp = rf'(?P<{KMESSAGE}>.*)'
-
-line_pattern = re.compile(rf'^{date_exp}\s+{proc_exp}\s+{level_exp}\s+{node_exp}\s+-\s+{message_exp}$')
-
-# examples
-# STDOUT: [INFO] ------------------------------------------------------------------------
-maven_line_pattern = re.compile(rf'^STDOUT:\s+\[{level_exp}\]\s+{message_exp}$')
-
-# examples
-# STDOUT: INFO  [2023-06-16 18:55:56,123] [com.datastax.durationtest.core.DurationTest.main()] c.d.durationtest.core.DurationTest - Beginning Duration Test...
-# STDOUT: INFO  [2023-06-16 19:23:23,506] [duration-test-executorService-4] c.d.durationtest.core.DurationTest - Completed 874000 suite tests...
-logback_line_pattern = re.compile(rf'^STDOUT:\s+{level_exp}\s+\[{date_exp}\]\s+\[(?P<thread>[\w\-().]+)\s*\]\s+(?P<classname>[\w\-.]+)\s+-\s+{message_exp}$')
-
-stdout_line_pattern = re.compile(rf'^STDOUT: {message_exp}$')
 
 
 def event_summary(events):
@@ -106,23 +88,11 @@ def summarize(args, events, baseline):
             print('--------------------------------------------------------------------------------')
 
 
-def parse_line(line):
-    return line_pattern.match(line)
-
-
-def parse_maven_line(line):
-    return maven_line_pattern.match(line)
-
-
-def parse_logback_line(line):
-    return logback_line_pattern.match(line)
-
-
 ip_address_pattern = re.compile(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:[0-9]{2,})?')
 uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 hex_pattern = re.compile(r'[0-9a-f]{8,}')
 java_line_pattern = re.compile(f'\.java:[0-9]+')
-jar_pattern = re.compile(r'[\w\-.]+.jar:[\w\-.]+')
+jar_pattern = re.compile(r'[\w\-.]+.jar:[\w\-_.]+')
 inflight_pattern = re.compile(r'inFlight=[0-9]+')
 
 sub_patterns = {
@@ -147,45 +117,6 @@ def apply_substitutions(args, line):
     return line
 
 
-def parse_events(args, file):
-    events = []
-    with file:
-        for line in file:
-            m = parse_line(apply_substitutions(args, line))
-            if m is not None:
-                if args.input_limit and len(events) >= int(args.input_limit):
-                    debug(f'reached requested limit if {args.input_limit} events')
-                    break
-                events.append(m.groupdict())
-            elif len(events):
-                events[-1][KMESSAGE] += f'{line}'
-    consolidated = []
-    for event in events:
-        maven_match = parse_maven_line(event['message'])
-        logback_match = parse_logback_line(event['message'])
-        if maven_match is not None:
-            event[KMESSAGE] = maven_match.groupdict()
-            event[KMESSAGE]['type'] = 'maven'
-            consolidated.append(event)
-        elif logback_match is not None:
-            event[KMESSAGE] = logback_match.groupdict()
-            event[KMESSAGE]['type'] = 'logback'
-            consolidated.append(event)
-        elif len(consolidated) and consolidated[-1][KMESSAGE]['type'] != 'toplevel':
-            line = event[KMESSAGE]
-            stdout_match = stdout_line_pattern.match(line)
-            if stdout_match:
-                line = stdout_match.group(KMESSAGE)
-            consolidated[-1][KMESSAGE][KMESSAGE] += f'\n{line}'
-        else:
-            event[KMESSAGE] = {
-                'type': 'toplevel',
-                KMESSAGE: event[KMESSAGE]
-            }
-            consolidated.append(event)
-    return consolidated
-
-
 def main(args, argv):
     global DEBUG_ON
     if args.debug:
@@ -198,10 +129,16 @@ def main(args, argv):
         debug(f'opening {argv[0]}')
         file = open(argv[0], 'r')
 
-    results = parse_events(args, file)
+    results = event_parser.LogParser(args, file).events
+    print(results[-1])
     baseline = None
     if args.compare_to:
-        baseline = parse_events(args, open(args.compare_to, 'r'))
+        baseline = event_parser.LogParser(args, open(args.compare_to, 'r')).events
+        for event in baseline:
+            event['message']['message'] = apply_substitutions(args, event['message']['message'])
+
+    for event in results:
+        event['message']['message'] = apply_substitutions(args, event['message']['message'])
 
     summarize(args, results, baseline)
 
