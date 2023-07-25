@@ -47,7 +47,7 @@ if __name__ == "__main__":
             if host_id == "null":
                 continue
             if host_id not in hosts:
-                hosts[host_id] = {'host_id': host_id, 'ips': []}
+                hosts[host_id] = {'host_id': host_id, 'ips': set()}
 
     # hostId may be mentioned without keyname in message
     for event in events:
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         if len(message_host_ids) == 1:
             (host_id, ) = message_host_ids
             for ip_and_port in ip_and_port_expr.findall(event['message']):
-                hosts[host_id]['ips'].append(ip_and_port)
+                hosts[host_id]['ips'].add(ip_and_port)
 
     print("")
 
