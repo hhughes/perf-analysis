@@ -36,7 +36,7 @@ class LogParser:
 
     # STDOUT: 00:36:05.862 [s0-admin-1] DEBUG c.d.o.d.i.c.m.NodeStateManager - [s0] Processing ChannelEvent(CLOSED, Node(endPoint=bb96eb58-c98f-4495-bde1-ce91bc721b30-us-east1.db.astra-test.datastax.com:29042:441c04f2-1c6d-4a26-b721-2d4ba0895cdb, hostId=441c04f2-1c6d-4a26-b721-2d4ba0895cdb, hashCode=3dcde56d))
     demo_line_pattern = re.compile(
-        rf'^STDOUT:\s+{time_exp}\s+\[(?P<thread>[\w\-().]+)\s*\]\s+{level_exp}\s+(?P<classname>[\w\-.]+)\s+-\s+{message_exp}$')
+        rf'^(STDOUT:\s+)?{time_exp}\s+\[(?P<thread>[\w\-().]+)\s*\]\s+{level_exp}\s+(?P<classname>[\w\-.]+)\s+-\s+{message_exp}$')
 
     def __init__(self, args, file):
         self.events = self.parse_events(args, file)

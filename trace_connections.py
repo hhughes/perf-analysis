@@ -4,6 +4,16 @@ import event_parser
 import re
 import argparse
 
+
+def merge(d1, d2):
+    # d2 takes preference over d1
+    out = {}
+    for d in [d1, d2]:
+        for k in d:
+            out[k] = d[k]
+    return out
+
+
 # Node(endPoint=bb96eb58-c98f-4495-bde1-ce91bc721b30-us-east1.db.astra-test.datastax.com:29042:3e6ee081-e942-4553-bc05-43ae40ffcd8b, hostId=3e6ee081-e942-4553-bc05-43ae40ffcd8b, hashCode=407237c3)
 host_id_expr = re.compile(r'hostId=([\w\-]+)')
 ip_and_port_expr = re.compile(r' /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+)')
@@ -29,9 +39,7 @@ if __name__ == "__main__":
     for event in event_parser.LogParser(args, sys.stdin).events:
         # unwrap inner event
         if 'message' in event and isinstance(event['message'], dict):
-            events.append(event['message'])
-        else:
-            events.append(event)
+            events.append(merge(event, event['message']))
 
     hosts = {}
     for event in events:
