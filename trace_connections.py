@@ -83,6 +83,8 @@ if __name__ == "__main__":
         print(f"host id: {color.BOLD}{host_id}{color.END} ({', '.join(host['ips'])})")
         print("---------------------------------------------")
         for event in events_by_host_id[host_id]:
+            if "time" not in event:
+                continue
             highlit_message = event["message"].replace(host_id, f"{color.BOLD}{host_id}{color.END}")
             for ip in hosts[host_id]['ips']:
                 highlit_message = highlit_message.replace(ip, f"{color.BOLD}{ip}{color.END}")
